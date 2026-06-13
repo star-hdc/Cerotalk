@@ -1,0 +1,6 @@
+{
+  "name": "Cerotalk",
+  "description": "Red social interactiva con historias, publicaciones, mensajes directos y notificaciones en tiempo real, diseñada con una interfaz moderna y fluida.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
