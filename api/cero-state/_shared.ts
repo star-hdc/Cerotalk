@@ -1,13 +1,9 @@
-import {
-  INITIAL_CHATS,
-  INITIAL_NOTIFICATIONS,
-  INITIAL_POSTS,
-  INITIAL_PROFILES,
-  INITIAL_STORIES,
-} from '../../src/data/mockData';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const TABLE_NAME = 'cerotalk_state';
 const STATE_ID = 'main';
+const DEFAULT_STATE_PATH = path.join(process.cwd(), 'data', 'cerotalk-state.json');
 
 type SharedCeroState = {
   profiles: unknown[];
@@ -18,13 +14,33 @@ type SharedCeroState = {
   updatedAt?: string;
 };
 
+function readDefaultStateFile(): SharedCeroState {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(DEFAULT_STATE_PATH, 'utf8')) as Partial<SharedCeroState>;
+
+    return {
+      profiles: Array.isArray(parsed.profiles) ? parsed.profiles : [],
+      posts: Array.isArray(parsed.posts) ? parsed.posts : [],
+      stories: Array.isArray(parsed.stories) ? parsed.stories : [],
+      chats: Array.isArray(parsed.chats) ? parsed.chats : [],
+      notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
+      updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date().toISOString(),
+    };
+  } catch {
+    return {
+      profiles: [],
+      posts: [],
+      stories: [],
+      chats: [],
+      notifications: [],
+      updatedAt: new Date().toISOString(),
+    };
+  }
+}
+
 export function defaultState(): SharedCeroState {
   return {
-    profiles: INITIAL_PROFILES,
-    posts: INITIAL_POSTS,
-    stories: INITIAL_STORIES,
-    chats: INITIAL_CHATS,
-    notifications: INITIAL_NOTIFICATIONS,
+    ...readDefaultStateFile(),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -58,12 +74,14 @@ async function supabaseFetch(path: string, init: RequestInit = {}) {
 }
 
 function normalizeState(state: Partial<SharedCeroState>): SharedCeroState {
+  const defaults = defaultState();
+
   return {
-    profiles: Array.isArray(state.profiles) ? state.profiles : INITIAL_PROFILES,
-    posts: Array.isArray(state.posts) ? state.posts : INITIAL_POSTS,
-    stories: Array.isArray(state.stories) ? state.stories : INITIAL_STORIES,
-    chats: Array.isArray(state.chats) ? state.chats : INITIAL_CHATS,
-    notifications: Array.isArray(state.notifications) ? state.notifications : INITIAL_NOTIFICATIONS,
+    profiles: Array.isArray(state.profiles) ? state.profiles : defaults.profiles,
+    posts: Array.isArray(state.posts) ? state.posts : defaults.posts,
+    stories: Array.isArray(state.stories) ? state.stories : defaults.stories,
+    chats: Array.isArray(state.chats) ? state.chats : defaults.chats,
+    notifications: Array.isArray(state.notifications) ? state.notifications : defaults.notifications,
     updatedAt: state.updatedAt || new Date().toISOString(),
   };
 }
