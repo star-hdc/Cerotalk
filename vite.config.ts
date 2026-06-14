@@ -13,6 +13,7 @@ import {
 
 const stateDir = path.resolve(__dirname, 'data');
 const statePath = path.join(stateDir, 'cerotalk-state.json');
+const normalizedStatePath = statePath.split(path.sep).join('/');
 const supabaseTableName = 'cerotalk_state';
 const supabaseStateId = 'main';
 
@@ -178,6 +179,8 @@ function sharedStateApi(env: RuntimeEnv): Plugin {
   return {
     name: 'cerotalk-shared-state-api',
     configureServer(server) {
+      server.watcher.unwatch(statePath);
+
       server.middlewares.use('/api/cero-state', async (req, res) => {
         try {
           const useSupabase = Boolean(getSupabaseConfig(env));
@@ -235,7 +238,11 @@ export default defineConfig(({ mode }) => {
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: env.DISABLE_HMR === 'true' ? null : {},
+      watch: env.DISABLE_HMR === 'true'
+        ? null
+        : {
+            ignored: [normalizedStatePath, '**/data/cerotalk-state.json'],
+          },
     },
   };
 });

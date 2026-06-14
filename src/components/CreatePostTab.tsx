@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { Post, UserProfile } from '../types';
 import { CURRENT_USER } from '../data/mockData';
-import { Camera, FileText, Image as ImageIcon, Send, Sparkles, Check } from 'lucide-react';
+import { Camera, FileText, Image as ImageIcon, Send, Sparkles, Check, Film, Video } from 'lucide-react';
 
 interface CreatePostTabProps {
   currentUser: UserProfile;
@@ -22,11 +22,33 @@ const PRESET_IAMGES = [
   { id: 'p5', name: 'Espacio Cósmico', url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=800&q=80' }
 ];
 
+const PRESET_GIFS = [
+  { id: 'g1', name: 'Celebración', url: 'https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif' },
+  { id: 'g2', name: 'Aplausos', url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif' },
+  { id: 'g3', name: 'Energía', url: 'https://media.giphy.com/media/3o7abldj0b3rxrZUxW/giphy.gif' }
+];
+
+const PRESET_VIDEOS = [
+  { id: 'v1', name: 'Luces urbanas', url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4' },
+  { id: 'v2', name: 'Clip corto', url: 'https://media.w3.org/2010/05/sintel/trailer.mp4' }
+];
+
+type CreateMediaType = Post['mediaType'];
+
 export default function CreatePostTab({ currentUser, onAddPost, onNavigateToHome }: CreatePostTabProps) {
   const [content, setContent] = useState('');
-  const [mediaType, setMediaType] = useState<'text' | 'image'>('image');
+  const [mediaType, setMediaType] = useState<CreateMediaType>('image');
   const [mediaUrl, setMediaUrl] = useState(PRESET_IAMGES[0].url);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  const setMediaMode = (nextType: CreateMediaType) => {
+    setMediaType(nextType);
+
+    if (nextType === 'image') setMediaUrl(PRESET_IAMGES[0].url);
+    if (nextType === 'gif') setMediaUrl(PRESET_GIFS[0].url);
+    if (nextType === 'video') setMediaUrl(PRESET_VIDEOS[0].url);
+    if (nextType === 'text') setMediaUrl('');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +60,7 @@ export default function CreatePostTab({ currentUser, onAddPost, onNavigateToHome
       authorAvatar: currentUser.avatar,
       content: content.trim(),
       mediaType,
-      mediaUrl: mediaType === 'image' ? mediaUrl : undefined
+      mediaUrl: mediaType !== 'text' ? mediaUrl : undefined
     });
 
     setIsSuccess(true);
@@ -107,47 +129,73 @@ export default function CreatePostTab({ currentUser, onAddPost, onNavigateToHome
             <span className="font-sans text-[10px] font-bold text-zinc-400 uppercase tracking-wide block">
               Tipo de Publicación
             </span>
-            <div className="grid grid-cols-2 gap-2 bg-[#0a0c10] p-1 rounded-xl">
+            <div className="grid grid-cols-4 gap-1.5 bg-[#0a0c10] p-1 rounded-xl">
               <button 
                 id="select-media-image"
                 type="button"
-                onClick={() => setMediaType('image')}
-                className={`py-2 px-4 rounded-lg font-sans text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                onClick={() => setMediaMode('image')}
+                className={`py-2 px-2 rounded-lg font-sans text-[10px] font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${
                   mediaType === 'image' 
                     ? 'bg-[#1a1d24] text-[#00bfb2] border border-zinc-800' 
                     : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
                 <ImageIcon className="h-4 w-4" />
-                Con Imagen
+                Imagen
+              </button>
+              <button 
+                id="select-media-gif"
+                type="button"
+                onClick={() => setMediaMode('gif')}
+                className={`py-2 px-2 rounded-lg font-sans text-[10px] font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                  mediaType === 'gif' 
+                    ? 'bg-[#1a1d24] text-[#00bfb2] border border-zinc-800' 
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                <Film className="h-4 w-4" />
+                GIF
+              </button>
+              <button 
+                id="select-media-video"
+                type="button"
+                onClick={() => setMediaMode('video')}
+                className={`py-2 px-2 rounded-lg font-sans text-[10px] font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                  mediaType === 'video' 
+                    ? 'bg-[#1a1d24] text-[#00bfb2] border border-zinc-800' 
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                <Video className="h-4 w-4" />
+                Video
               </button>
               <button 
                 id="select-media-text"
                 type="button"
-                onClick={() => setMediaType('text')}
-                className={`py-2 px-4 rounded-lg font-sans text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                onClick={() => setMediaMode('text')}
+                className={`py-2 px-2 rounded-lg font-sans text-[10px] font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer ${
                   mediaType === 'text' 
                     ? 'bg-[#1a1d24] text-[#00bfb2] border border-zinc-800' 
                     : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
                 <FileText className="h-4 w-4" />
-                Solo Texto
+                Texto
               </button>
             </div>
           </div>
 
-          {/* Image Settings */}
-          {mediaType === 'image' && (
+          {/* Media Settings */}
+          {mediaType !== 'text' && (
             <div className="space-y-3.5 animate-in slide-in-from-top-3 duration-250">
               
               {/* Preset Carousel */}
               <div className="space-y-1.5">
                 <span className="font-sans text-[10px] text-zinc-500">
-                  Elige una imagen estética de muestra:
+                  Elige {mediaType === 'image' ? 'una imagen estética' : mediaType === 'gif' ? 'un GIF' : 'un video'} de muestra:
                 </span>
                 <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-none">
-                  {PRESET_IAMGES.map((img) => (
+                  {(mediaType === 'image' ? PRESET_IAMGES : mediaType === 'gif' ? PRESET_GIFS : PRESET_VIDEOS).map((img) => (
                     <button 
                       key={img.id}
                       id={`preset-img-${img.id}`}
@@ -168,22 +216,22 @@ export default function CreatePostTab({ currentUser, onAddPost, onNavigateToHome
               {/* Paste URL */}
               <div className="space-y-1">
                 <span id="lbl-custom-url" className="font-sans text-[10px] text-zinc-500 block">
-                  O pega una URL de imagen externa:
+                  O pega una URL externa:
                 </span>
                 <input 
                   id="input-custom-image-url"
                   type="url" 
                   value={mediaUrl}
                   onChange={(e) => setMediaUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
+                  placeholder={mediaType === 'video' ? 'https://.../video.mp4' : mediaType === 'gif' ? 'https://.../animacion.gif' : 'https://images.unsplash.com/...'}
                   className="w-full rounded-xl bg-zinc-950 border border-zinc-900 px-4 py-2 font-sans text-xs text-white placeholder-zinc-800 focus:border-[#00bfb2] focus:outline-none"
                 />
               </div>
 
-              {/* Upload image from computer */}
+              {/* Upload media from computer */}
               <div className="space-y-1 text-left">
                 <span className="font-sans text-[10px] text-zinc-500 block select-none">
-                  O sube una foto desde tu ordenador:
+                  O sube un archivo desde tu ordenador:
                 </span>
                 <label className="flex flex-col items-center justify-center border border-dashed border-zinc-800 rounded-xl bg-zinc-950/20 p-4 hover:border-[#00bfb2] hover:bg-zinc-950/50 cursor-pointer transition-all">
                   <div className="flex flex-col items-center justify-center space-y-1">
@@ -193,7 +241,7 @@ export default function CreatePostTab({ currentUser, onAddPost, onNavigateToHome
                   </div>
                   <input 
                     type="file" 
-                    accept="image/*" 
+                    accept={mediaType === 'video' ? 'video/*' : mediaType === 'gif' ? 'image/gif,image/*' : 'image/*'} 
                     className="hidden" 
                     onChange={(e) => {
                       const file = e.target.files?.[0];
@@ -216,15 +264,19 @@ export default function CreatePostTab({ currentUser, onAddPost, onNavigateToHome
                 <div className="space-y-1">
                   <span className="font-sans text-[10px] font-bold text-zinc-650 uppercase block">Vista previa:</span>
                   <div className="relative h-32 w-full rouned-xl overflow-hidden bg-black flex items-center justify-center rounded-xl border border-zinc-900">
-                    <img 
-                      src={mediaUrl} 
-                      alt="Preview" 
-                      className="h-full w-full object-cover" 
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=300&q=80';
-                      }}
-                      referrerPolicy="no-referrer"
-                    />
+                    {mediaType === 'video' ? (
+                      <video src={mediaUrl} className="h-full w-full object-contain" controls playsInline />
+                    ) : (
+                      <img 
+                        src={mediaUrl} 
+                        alt="Preview" 
+                        className="h-full w-full object-cover" 
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=300&q=80';
+                        }}
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
                   </div>
                 </div>
               )}

@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Post, Story, UserProfile } from '../types';
 import { Heart, MessageSquare, Repeat2, Bookmark, Send, Sparkles, AlertCircle, Share2, Copy, Camera, X, Trash2 } from 'lucide-react';
 import HashtagText from './HashtagText';
+import PostMedia from './PostMedia';
 
 interface FeedSectionProps {
   posts: Post[];
@@ -275,20 +276,7 @@ export default function FeedSection({
                 </p>
               </div>
 
-              {/* Card Image Banner */}
-              {post.mediaType === 'image' && post.mediaUrl && (
-                <div 
-                  id={`post-image-box-${post.id}`}
-                  className="relative mt-3 max-h-[380px] w-full overflow-hidden bg-zinc-950 flex items-center justify-center border-y border-zinc-900 group"
-                >
-                  <img 
-                    src={post.mediaUrl} 
-                    alt="Post attachments" 
-                    className="w-full max-h-[380px] object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-              )}
+              <PostMedia post={post} />
 
               {/* Actions Footer Bar */}
               <div className="grid grid-cols-4 border-t border-zinc-950 bg-gradient-to-t from-zinc-950/15 to-transparent py-1 select-none">

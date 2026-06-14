@@ -8,6 +8,7 @@ import { Post, UserProfile } from '../types';
 import { CURRENT_USER } from '../data/mockData';
 import { Bookmark, FileText, Settings, Heart, MessageSquare, Sparkles, LogOut } from 'lucide-react';
 import HashtagText from './HashtagText';
+import PostMedia from './PostMedia';
 
 interface ProfileTabProps {
   currentUser: UserProfile;
@@ -186,16 +187,7 @@ export default function ProfileTab({
                 <HashtagText text={post.content} />
               </p>
 
-              {post.mediaType === 'image' && post.mediaUrl && (
-                <div className="h-28 w-full rounded-lg overflow-hidden bg-zinc-950 border border-zinc-900 mt-2">
-                  <img 
-                    src={post.mediaUrl} 
-                    alt="attachment" 
-                    className="h-full w-full object-cover" 
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-              )}
+              <PostMedia post={post} variant="profile" />
 
               <div className="flex items-center gap-4 mt-3 pt-3.5 border-t border-zinc-950 text-[10px] font-sans text-zinc-505 text-zinc-500">
                 <button 

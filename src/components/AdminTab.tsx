@@ -17,7 +17,9 @@ import {
   Sparkles, 
   PlusCircle, 
   FileText,
-  Camera
+  Camera,
+  Film,
+  Video
 } from 'lucide-react';
 
 interface AdminTabProps {
@@ -45,6 +47,17 @@ const POST_THEMES = [
   { name: 'Bosque de Niebla', url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1000&q=85' }
 ];
 
+const POST_GIFS = [
+  { name: 'Celebración', url: 'https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif' },
+  { name: 'Aplausos', url: 'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif' },
+  { name: 'Energía', url: 'https://media.giphy.com/media/3o7abldj0b3rxrZUxW/giphy.gif' }
+];
+
+const POST_VIDEOS = [
+  { name: 'Luces urbanas', url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4' },
+  { name: 'Clip corto', url: 'https://media.w3.org/2010/05/sintel/trailer.mp4' }
+];
+
 export default function AdminTab({
   profiles,
   currentProfileId,
@@ -68,7 +81,7 @@ export default function AdminTab({
   // Quick Post Creator state
   const [selectedPosterId, setSelectedPosterId] = useState<string>(currentProfileId);
   const [postContent, setPostContent] = useState('');
-  const [postMediaType, setPostMediaType] = useState<'text' | 'image'>('image');
+  const [postMediaType, setPostMediaType] = useState<Post['mediaType']>('image');
   const [postMediaUrl, setPostMediaUrl] = useState(POST_THEMES[0].url);
 
   const activeProfile = (profiles && profiles.find(p => p && p.id === currentProfileId)) || (profiles && profiles[0]) || { id: 'user', name: 'Mateo Momoa', username: 'mat.moa', avatar: '', bio: '', role: '', followers: 0, following: 0 };
@@ -103,6 +116,15 @@ export default function AdminTab({
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
+  const setQuickPostMediaType = (nextType: Post['mediaType']) => {
+    setPostMediaType(nextType);
+
+    if (nextType === 'image') setPostMediaUrl(POST_THEMES[0].url);
+    if (nextType === 'gif') setPostMediaUrl(POST_GIFS[0].url);
+    if (nextType === 'video') setPostMediaUrl(POST_VIDEOS[0].url);
+    if (nextType === 'text') setPostMediaUrl('');
+  };
+
   const handlePublishAsSelected = (e: React.FormEvent) => {
     e.preventDefault();
     if (!postContent.trim()) return;
@@ -115,7 +137,7 @@ export default function AdminTab({
       authorAvatar: poster.avatar,
       content: postContent.trim(),
       mediaType: postMediaType,
-      mediaUrl: postMediaType === 'image' ? postMediaUrl : undefined
+      mediaUrl: postMediaType !== 'text' ? postMediaUrl : undefined
     });
 
     setPostContent('');
@@ -484,40 +506,66 @@ export default function AdminTab({
           </div>
 
           {/* media layout select */}
-          <div className="grid grid-cols-2 gap-2 bg-zinc-950 p-1 rounded-xl">
+          <div className="grid grid-cols-4 gap-1.5 bg-zinc-950 p-1 rounded-xl">
             <button
               type="button"
-              onClick={() => setPostMediaType('image')}
-              className={`py-2 px-3 rounded-lg font-sans text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer ${
+              onClick={() => setQuickPostMediaType('image')}
+              className={`py-2 px-2 rounded-lg font-sans text-[10px] font-semibold flex items-center justify-center gap-1 cursor-pointer ${
                 postMediaType === 'image' 
                   ? 'bg-[#1a1d24] text-[#00bfb2] border border-zinc-900' 
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
               <ImageIcon className="h-3.5 w-3.5" />
-              Con Imagen
+              Imagen
             </button>
             <button
               type="button"
-              onClick={() => setPostMediaType('text')}
-              className={`py-2 px-3 rounded-lg font-sans text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer ${
+              onClick={() => setQuickPostMediaType('gif')}
+              className={`py-2 px-2 rounded-lg font-sans text-[10px] font-semibold flex items-center justify-center gap-1 cursor-pointer ${
+                postMediaType === 'gif' 
+                  ? 'bg-[#1a1d24] text-[#00bfb2] border border-zinc-900' 
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <Film className="h-3.5 w-3.5" />
+              GIF
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuickPostMediaType('video')}
+              className={`py-2 px-2 rounded-lg font-sans text-[10px] font-semibold flex items-center justify-center gap-1 cursor-pointer ${
+                postMediaType === 'video' 
+                  ? 'bg-[#1a1d24] text-[#00bfb2] border border-zinc-900' 
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <Video className="h-3.5 w-3.5" />
+              Video
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuickPostMediaType('text')}
+              className={`py-2 px-2 rounded-lg font-sans text-[10px] font-semibold flex items-center justify-center gap-1 cursor-pointer ${
                 postMediaType === 'text' 
                   ? 'bg-[#1a1d24] text-[#00bfb2] border border-zinc-900' 
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
               <FileText className="h-3.5 w-3.5" />
-              Solo Texto
+              Texto
             </button>
           </div>
 
-          {postMediaType === 'image' && (
+          {postMediaType !== 'text' && (
             <div className="space-y-2 pt-1 animate-in fade-in duration-200">
-              <span className="font-sans text-[10px] text-zinc-500 block">Sugerencia de visuales:</span>
+              <span className="font-sans text-[10px] text-zinc-500 block">
+                Sugerencias de {postMediaType === 'image' ? 'imágenes' : postMediaType === 'gif' ? 'GIFs' : 'videos'}:
+              </span>
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                {POST_THEMES.map((theme, idx) => (
+                {(postMediaType === 'image' ? POST_THEMES : postMediaType === 'gif' ? POST_GIFS : POST_VIDEOS).map((theme) => (
                   <button
-                    key={idx}
+                    key={theme.url}
                     type="button"
                     onClick={() => setPostMediaUrl(theme.url)}
                     className={`flex-shrink-0 cursor-pointer rounded-lg border text-[10px] px-2.5 py-1.5 font-sans transition-all ${
@@ -532,27 +580,27 @@ export default function AdminTab({
               </div>
 
               <div className="space-y-1">
-                <span className="font-sans text-[9px] text-zinc-500 block">O pega una URL de imagen personalizada:</span>
+                <span className="font-sans text-[9px] text-zinc-500 block">O pega una URL externa:</span>
                 <input 
                   type="url"
                   value={postMediaUrl}
                   onChange={(e) => setPostMediaUrl(e.target.value)}
                   className="w-full rounded-lg bg-zinc-950 border border-zinc-900 px-3 py-1.5 font-sans text-xs text-white focus:border-[#00bfb2] focus:outline-none"
-                  placeholder="https://images.unsplash.com/..."
+                  placeholder={postMediaType === 'video' ? 'https://.../video.mp4' : postMediaType === 'gif' ? 'https://.../animacion.gif' : 'https://images.unsplash.com/...'}
                 />
               </div>
 
               {/* Upload image from computer for Quick Post Creator */}
               <div className="space-y-1 text-left">
-                <span className="font-sans text-[9px] text-zinc-500 block text-left">O sube la foto de la publicación desde tu ordenador:</span>
+                <span className="font-sans text-[9px] text-zinc-500 block text-left">O sube el archivo de la publicación desde tu ordenador:</span>
                 <label className="flex items-center justify-center border border-dashed border-zinc-800 rounded-lg bg-zinc-950 p-2.5 hover:border-[#00bfb2] hover:bg-[#111318] cursor-pointer transition-all mt-1">
                   <div className="flex items-center gap-2">
                     <Camera className="h-4 w-4 text-[#00bfb2]" />
-                    <span className="font-sans text-[10.5px] text-zinc-400">Buscar foto en el ordenador...</span>
+                    <span className="font-sans text-[10.5px] text-zinc-400">Buscar archivo en el ordenador...</span>
                   </div>
                   <input 
                     type="file" 
-                    accept="image/*" 
+                    accept={postMediaType === 'video' ? 'video/*' : postMediaType === 'gif' ? 'image/gif,image/*' : 'image/*'} 
                     className="hidden" 
                     onChange={(e) => {
                       const file = e.target.files?.[0];

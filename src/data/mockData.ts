@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Post, Story, Notification, Chat, UserProfile } from '../types';
+import type { Post, Story, Notification, Chat, UserProfile } from '../types';
 
 export const CURRENT_USER = {
   name: "Mateo Momoa",

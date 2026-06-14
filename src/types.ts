@@ -20,7 +20,7 @@ export interface Post {
   authorUsername: string;
   authorAvatar: string;
   content: string;
-  mediaType: 'image' | 'text';
+  mediaType: 'image' | 'gif' | 'video' | 'text';
   mediaUrl?: string;
   likes: number;
   likedByUser: boolean;
