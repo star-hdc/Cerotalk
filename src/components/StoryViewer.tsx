@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Story } from '../types';
 import { X, ChevronLeft, ChevronRight, Send, Check, Trash2 } from 'lucide-react';
+import HashtagText from './HashtagText';
 
 interface StoryViewerProps {
   stories: Story[];
@@ -255,7 +256,7 @@ export default function StoryViewer({
           {currentStory.caption && (
             <div className="absolute inset-x-0 bottom-24 z-20 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-6 py-4 text-center">
               <p className="font-sans text-sm text-white drop-shadow-md">
-                {currentStory.caption}
+                <HashtagText text={currentStory.caption} />
               </p>
             </div>
           )}

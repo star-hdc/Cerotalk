@@ -5,6 +5,7 @@
 
 export interface Comment {
   id: string;
+  authorActorId?: string;
   authorName: string;
   authorUsername: string;
   authorAvatar: string;
@@ -14,6 +15,7 @@ export interface Comment {
 
 export interface Post {
   id: string;
+  authorActorId?: string;
   authorName: string;
   authorUsername: string;
   authorAvatar: string;
@@ -27,6 +29,7 @@ export interface Post {
   saved: boolean;
   createdAt: string;
   likedBy?: string[]; // List of userProfile IDs who liked this post
+  savedBy?: string[]; // List of local/profile actor IDs who saved this post
 }
 
 export interface Story {

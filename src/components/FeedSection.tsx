@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { Post, Story, UserProfile } from '../types';
 import { Heart, MessageSquare, Repeat2, Bookmark, Send, Sparkles, AlertCircle, Share2, Copy, Camera, X, Trash2 } from 'lucide-react';
+import HashtagText from './HashtagText';
 
 interface FeedSectionProps {
   posts: Post[];
@@ -16,6 +17,7 @@ interface FeedSectionProps {
   onAddStory: (userId: string, mediaUrl: string, caption: string) => void;
   onToggleLike: (postId: string) => void;
   onAddComment: (postId: string, content: string) => void;
+  onDeleteComment: (postId: string, commentId: string) => void;
   onToggleSave: (postId: string) => void;
   onSharePost: (postId: string) => void;
   isAdminMode?: boolean;
@@ -31,6 +33,7 @@ export default function FeedSection({
   onAddStory,
   onToggleLike,
   onAddComment,
+  onDeleteComment,
   onToggleSave,
   onSharePost,
   isAdminMode = false,
@@ -186,6 +189,7 @@ export default function FeedSection({
         {(posts || []).map((post) => {
           const isCommentsOpen = activeCommentPostId === post.id;
           const isShareOpen = shareActivePostId === post.id;
+          const savedCount = post.savedBy?.length || 0;
 
           return (
             <div 
@@ -267,7 +271,7 @@ export default function FeedSection({
               {/* Card Main Text Content */}
               <div className="px-4 py-1.5">
                 <p className="font-sans text-xs text-zinc-200 leading-relaxed whitespace-pre-wrap">
-                  {post.content}
+                  <HashtagText text={post.content} />
                 </p>
               </div>
 
@@ -328,7 +332,9 @@ export default function FeedSection({
                   }`}
                 >
                   <Repeat2 className="h-4.5 w-4.5" />
-                  <span className="font-sans">Compartir</span>
+                  <span className="font-sans">
+                    {post.shares || 0} Compartidos
+                  </span>
                 </button>
 
                 {/* 4. Guardar / Bookmark */}
@@ -342,7 +348,9 @@ export default function FeedSection({
                   }`}
                 >
                   <Bookmark className={`h-4.5 w-4.5 ${post.saved ? 'fill-[#ff9f1c]' : ''}`} />
-                  <span className="font-sans">{post.saved ? 'Guardado' : 'Guardar'}</span>
+                  <span className="font-sans">
+                    {savedCount} {savedCount === 1 ? 'Guardado' : 'Guardados'}
+                  </span>
                 </button>
 
               </div>
@@ -415,23 +423,42 @@ export default function FeedSection({
                         Aún no hay comentarios. ¡Sé el primero en iniciar la conversación!
                       </div>
                     ) : (
-                      (post.comments || []).map((comm) => (
-                        <div key={comm.id} className="flex gap-2.5 text-xs">
-                          <img 
-                            src={comm.authorAvatar} 
-                            alt={comm.authorName} 
-                            className="h-8 w-8 rounded-full object-cover mt-0.5"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="flex-1 bg-zinc-900/60 rounded-2xl px-3.5 py-2">
-                            <div className="flex items-center justify-between">
-                              <span className="font-sans font-bold text-white text-[11px]">{comm.authorName}</span>
-                              <span className="font-sans text-[9px] text-zinc-650">{comm.createdAt}</span>
+                      (post.comments || []).map((comm) => {
+                        const canDeleteComment = isAdminMode || comm.authorUsername === currentUser.username;
+
+                        return (
+                          <div key={comm.id} className="flex gap-2.5 text-xs">
+                            <img 
+                              src={comm.authorAvatar} 
+                              alt={comm.authorName} 
+                              className="h-8 w-8 rounded-full object-cover mt-0.5"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="flex-1 bg-zinc-900/60 rounded-2xl px-3.5 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-sans font-bold text-white text-[11px]">{comm.authorName}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-sans text-[9px] text-zinc-650">{comm.createdAt}</span>
+                                  {canDeleteComment && (
+                                    <button
+                                      type="button"
+                                      id={`delete-comment-${comm.id}`}
+                                      onClick={() => onDeleteComment(post.id, comm.id)}
+                                      className="rounded-md p-1 text-zinc-600 hover:bg-red-500/10 hover:text-red-300 transition-colors cursor-pointer"
+                                      title={isAdminMode ? 'Eliminar comentario como Admin' : 'Eliminar mi comentario'}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="font-sans text-zinc-300 mt-1">
+                                <HashtagText text={comm.content} />
+                              </p>
                             </div>
-                            <p className="font-sans text-zinc-300 mt-1">{comm.content}</p>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
 

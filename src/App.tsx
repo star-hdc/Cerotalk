@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -86,19 +86,140 @@ type SharedCeroState = {
 };
 
 const SHARED_STATE_API = '/api/cero-state';
+const LEGACY_VISITOR_PROFILE_ID = 'simulated_user';
 
 const isVisitorProfile = (profile: UserProfile) => (
-  profile.id === 'simulated_user' || profile.role === 'Visitante Temp'
+  profile.id === LEGACY_VISITOR_PROFILE_ID || profile.id.startsWith('temp_') || profile.role === 'Visitante Temp'
+);
+
+const isVisitorProfileId = (profileId: string) => (
+  profileId === LEGACY_VISITOR_PROFILE_ID || profileId.startsWith('temp_')
 );
 
 const withoutVisitorProfiles = (profiles: UserProfile[]) => (
   profiles.filter(profile => profile && !isVisitorProfile(profile))
 );
 
+const normalizeVisitorCredential = (value: string) => (
+  value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+);
+
+const makeVisitorCredentialHash = (username: string, password: string) => {
+  const credential = `${normalizeVisitorCredential(username)}:${password}`;
+  let hash = 2166136261;
+
+  for (let index = 0; index < credential.length; index += 1) {
+    hash ^= credential.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(36);
+};
+
+const makeVisitorProfileId = (username: string, password: string) => (
+  `temp_${makeVisitorCredentialHash(username, password)}`
+);
+
+const makeVisitorUsername = (username: string, profileId: string) => {
+  const cleanUsername = normalizeVisitorCredential(username).replace(/[^a-z0-9]/g, '') || 'visitante';
+  return `${cleanUsername}_${profileId.replace('temp_', '').slice(0, 5)}`;
+};
+
+const getVisitorProfileStorageKey = (profileId: string) => `cero_visitor_profile_${profileId}`;
+
+const loadVisitorProfile = (profileId: string): UserProfile | null => {
+  try {
+    const cached = safeStorage.getItem(getVisitorProfileStorageKey(profileId));
+    if (!cached) return null;
+
+    const parsed = JSON.parse(cached);
+    if (parsed && typeof parsed.id === 'string' && typeof parsed.name === 'string') {
+      return parsed;
+    }
+  } catch (error) {
+    console.warn('No se pudo cargar el perfil temporal guardado.', error);
+  }
+
+  return null;
+};
+
+const saveVisitorProfile = (profile: UserProfile) => {
+  safeStorage.setItem(getVisitorProfileStorageKey(profile.id), JSON.stringify(profile));
+};
+
+const getScopedVisitorStorageKey = (baseKey: string, profileId: string) => (
+  isVisitorProfileId(profileId) ? `${baseKey}_${profileId}` : baseKey
+);
+
+const createVisitorProfile = (name: string, password: string): UserProfile => {
+  const profileId = makeVisitorProfileId(name, password);
+  const savedProfile = loadVisitorProfile(profileId);
+  if (savedProfile) return savedProfile;
+
+  const randomAvatar = VISITOR_AVATARS[Math.floor(Math.random() * VISITOR_AVATARS.length)];
+  const newVisitor: UserProfile = {
+    id: profileId,
+    name,
+    username: makeVisitorUsername(name, profileId),
+    avatar: randomAvatar,
+    role: 'Visitante Temp',
+    bio: 'Visitante activo. Explorando las primicias e intrigas de los personajes de la serie.',
+    followers: 12,
+    following: 48
+  };
+
+  saveVisitorProfile(newVisitor);
+  return newVisitor;
+};
+
+const getPersonalPostInteractionsKey = (actorId: string) => `cero_post_interactions_${actorId}`;
+
+const loadPersonalPostInteractions = (actorId: string) => {
+  try {
+    const cached = safeStorage.getItem(getPersonalPostInteractionsKey(actorId));
+    if (!cached) return { savedPostIds: [] as string[] };
+
+    const parsed = JSON.parse(cached);
+    return {
+      savedPostIds: Array.isArray(parsed.savedPostIds)
+        ? parsed.savedPostIds.filter((id: unknown) => typeof id === 'string')
+        : []
+    };
+  } catch (error) {
+    console.warn('No se pudieron cargar las interacciones personales.', error);
+    return { savedPostIds: [] as string[] };
+  }
+};
+
+const savePersonalPostInteractions = (actorId: string, interactions: { savedPostIds: string[] }) => {
+  safeStorage.setItem(getPersonalPostInteractionsKey(actorId), JSON.stringify(interactions));
+};
+
+const isPostByPublicProfile = (post: Post, profiles: UserProfile[]) => {
+  if (post.authorActorId && isVisitorProfileId(post.authorActorId)) return false;
+
+  const publicProfiles = withoutVisitorProfiles(profiles || []);
+  return publicProfiles.some(profile => (
+    post.authorActorId === profile.id || post.authorUsername === profile.username || post.authorName === profile.name
+  ));
+};
+
+const sanitizeSharedPosts = (posts: Post[], profiles: UserProfile[]) => (
+  (posts || [])
+    .filter(post => post && isPostByPublicProfile(post, profiles))
+    .map(post => ({
+      ...post,
+      likedByUser: false,
+      saved: false,
+      likedBy: Array.isArray(post.likedBy) ? post.likedBy : [],
+      savedBy: Array.isArray(post.savedBy) ? post.savedBy : []
+    }))
+);
+
 const sanitizeSharedState = (state: SharedCeroState): SharedCeroState => ({
   profiles: withoutVisitorProfiles(state.profiles || []),
-  posts: state.posts || [],
-  stories: (state.stories || []).filter(story => story && story.userId !== 'simulated_user'),
+  posts: sanitizeSharedPosts(state.posts || [], state.profiles || []),
+  stories: (state.stories || []).filter(story => story && !isVisitorProfileId(story.userId)),
   chats: state.chats || [],
   notifications: state.notifications || []
 });
@@ -106,6 +227,19 @@ const sanitizeSharedState = (state: SharedCeroState): SharedCeroState => ({
 const applySharedProfiles = (incomingProfiles: UserProfile[], currentProfiles: UserProfile[]) => {
   const visitor = currentProfiles.find(profile => profile && isVisitorProfile(profile));
   return visitor ? [visitor, ...withoutVisitorProfiles(incomingProfiles)] : withoutVisitorProfiles(incomingProfiles);
+};
+
+const mergeSharedAndPrivatePosts = (
+  incomingPosts: Post[],
+  currentPosts: Post[],
+  publicProfiles: UserProfile[]
+) => {
+  const sharedIds = new Set((incomingPosts || []).map(post => post.id));
+  const privatePosts = (currentPosts || []).filter(post => (
+    !sharedIds.has(post.id) && !isPostByPublicProfile(post, publicProfiles)
+  ));
+
+  return [...(incomingPosts || []), ...privatePosts];
 };
 
 export function AppBody() {
@@ -175,6 +309,7 @@ export function AppBody() {
     followers: 1420,
     following: 382
   };
+  const postInteractionActorId = currentUser.id;
 
   const [posts, setPosts] = useState<Post[]>(() => {
     try {
@@ -218,8 +353,9 @@ export function AppBody() {
 
   const [chats, setChats] = useState<Chat[]>(() => {
     try {
-      const isVisitor = safeStorage.getItem('cero_current_profile_id') === 'simulated_user';
-      const key = isVisitor ? 'cero_visitor_chats' : 'cero_chats';
+      const cachedProfileId = safeStorage.getItem('cero_current_profile_id') || 'user';
+      const isVisitor = isVisitorProfileId(cachedProfileId);
+      const key = isVisitor ? getScopedVisitorStorageKey('cero_visitor_chats', cachedProfileId) : 'cero_chats';
       const cached = safeStorage.getItem(key);
       if (cached) {
         const parsed = JSON.parse(cached);
@@ -245,8 +381,9 @@ export function AppBody() {
 
   const [notifications, setNotifications] = useState<Notification[]>(() => {
     try {
-      const isVisitor = safeStorage.getItem('cero_current_profile_id') === 'simulated_user';
-      const key = isVisitor ? 'cero_visitor_notifications' : 'cero_notifications';
+      const cachedProfileId = safeStorage.getItem('cero_current_profile_id') || 'user';
+      const isVisitor = isVisitorProfileId(cachedProfileId);
+      const key = isVisitor ? getScopedVisitorStorageKey('cero_visitor_notifications', cachedProfileId) : 'cero_notifications';
       const cached = safeStorage.getItem(key);
       if (cached) {
         const parsed = JSON.parse(cached);
@@ -271,15 +408,21 @@ export function AppBody() {
   // Quick Search state
   const [searchTerm, setSearchTerm] = useState('');
   const [sharedStateReady, setSharedStateReady] = useState(false);
+  const [personalPostInteractions, setPersonalPostInteractions] = useState(() => (
+    loadPersonalPostInteractions(postInteractionActorId)
+  ));
 
   const applySharedStateFromServer = (shared: Partial<SharedCeroState>) => {
     isApplyingSharedState.current = true;
     lastSharedStateUpdate.current = shared.updatedAt || lastSharedStateUpdate.current;
+    const publicProfiles = withoutVisitorProfiles(shared.profiles || INITIAL_PROFILES);
     setProfiles(prev => applySharedProfiles(shared.profiles || INITIAL_PROFILES, prev));
-    setPosts(shared.posts || INITIAL_POSTS);
+    setPosts(prev => mergeSharedAndPrivatePosts(shared.posts || INITIAL_POSTS, prev, publicProfiles));
     setStories(shared.stories || INITIAL_STORIES);
-    setChats(shared.chats || INITIAL_CHATS);
-    setNotifications(shared.notifications || INITIAL_NOTIFICATIONS);
+    if (!isVisitorProfile(currentUser)) {
+      setChats(shared.chats || INITIAL_CHATS);
+      setNotifications(shared.notifications || INITIAL_NOTIFICATIONS);
+    }
   };
 
   useEffect(() => {
@@ -402,27 +545,35 @@ export function AppBody() {
   }, [posts]);
 
   useEffect(() => {
+    setPersonalPostInteractions(loadPersonalPostInteractions(postInteractionActorId));
+  }, [postInteractionActorId]);
+
+  useEffect(() => {
+    savePersonalPostInteractions(postInteractionActorId, personalPostInteractions);
+  }, [postInteractionActorId, personalPostInteractions]);
+
+  useEffect(() => {
     safeStorage.setItem('cero_stories', JSON.stringify(stories));
   }, [stories]);
 
   useEffect(() => {
-    const isVisitor = currentProfileId === 'simulated_user';
-    const key = isVisitor ? 'cero_visitor_chats' : 'cero_chats';
+    const isVisitor = isVisitorProfileId(currentProfileId);
+    const key = isVisitor ? getScopedVisitorStorageKey('cero_visitor_chats', currentProfileId) : 'cero_chats';
     safeStorage.setItem(key, JSON.stringify(chats));
   }, [chats, currentProfileId]);
 
   useEffect(() => {
-    const isVisitor = currentProfileId === 'simulated_user';
-    const key = isVisitor ? 'cero_visitor_notifications' : 'cero_notifications';
+    const isVisitor = isVisitorProfileId(currentProfileId);
+    const key = isVisitor ? getScopedVisitorStorageKey('cero_visitor_notifications', currentProfileId) : 'cero_notifications';
     safeStorage.setItem(key, JSON.stringify(notifications));
   }, [notifications, currentProfileId]);
 
   // Sync databases when current profile switches (e.g. Visitor login vs Mateo/Admin logout)
   useEffect(() => {
-    const isVisitor = currentProfileId === 'simulated_user';
+    const isVisitor = isVisitorProfileId(currentProfileId);
     
     // Load chats
-    const chatsKey = isVisitor ? 'cero_visitor_chats' : 'cero_chats';
+    const chatsKey = isVisitor ? getScopedVisitorStorageKey('cero_visitor_chats', currentProfileId) : 'cero_chats';
     const cachedChats = safeStorage.getItem(chatsKey);
     if (cachedChats) {
       try {
@@ -439,14 +590,14 @@ export function AppBody() {
           lastMessage: 'Sin mensajes aún'
         }));
         setChats(visitorInitialChats);
-        safeStorage.setItem('cero_visitor_chats', JSON.stringify(visitorInitialChats));
+        safeStorage.setItem(chatsKey, JSON.stringify(visitorInitialChats));
       } else {
         setChats(INITIAL_CHATS);
       }
     }
 
     // Load notifications
-    const notifsKey = isVisitor ? 'cero_visitor_notifications' : 'cero_notifications';
+    const notifsKey = isVisitor ? getScopedVisitorStorageKey('cero_visitor_notifications', currentProfileId) : 'cero_notifications';
     const cachedNotifs = safeStorage.getItem(notifsKey);
     if (cachedNotifs) {
       try {
@@ -593,7 +744,13 @@ export function AppBody() {
         const authorProfileByName = (post.authorName && typeof post.authorName === 'string') 
           ? profileMap.get(post.authorName.toLowerCase()) 
           : undefined;
-        const pAuthor = authorProfileByUsername || authorProfileByName;
+        const authorProfileByActor = (post.authorActorId && typeof post.authorActorId === 'string')
+          ? profiles.find(profile => profile?.id === post.authorActorId)
+          : undefined;
+        const safeAuthorProfileByName = authorProfileByName && !isVisitorProfile(authorProfileByName)
+          ? authorProfileByName
+          : undefined;
+        const pAuthor = authorProfileByActor || authorProfileByUsername || safeAuthorProfileByName;
 
         if (pAuthor) {
           if (post.authorAvatar !== pAuthor.avatar || post.authorName !== pAuthor.name || post.authorUsername !== pAuthor.username) {
@@ -612,7 +769,13 @@ export function AppBody() {
           const cProfileByName = (c.authorName && typeof c.authorName === 'string') 
             ? profileMap.get(c.authorName.toLowerCase()) 
             : undefined;
-          const pComm = cProfileByUsername || cProfileByName;
+          const cProfileByActor = (c.authorActorId && typeof c.authorActorId === 'string')
+            ? profiles.find(profile => profile?.id === c.authorActorId)
+            : undefined;
+          const safeCommentProfileByName = cProfileByName && !isVisitorProfile(cProfileByName)
+            ? cProfileByName
+            : undefined;
+          const pComm = cProfileByActor || cProfileByUsername || safeCommentProfileByName;
 
           if (pComm) {
             if (c.authorAvatar !== pComm.avatar || c.authorName !== pComm.name || c.authorUsername !== pComm.username) {
@@ -775,11 +938,17 @@ export function AppBody() {
   const handleToggleLike = (postId: string) => {
     setPosts(prev => prev.map(post => {
       if (post.id === postId) {
-        const isLiked = post.likedByUser;
+        const likedBy = Array.isArray(post.likedBy) ? post.likedBy : [];
+        const isLiked = likedBy.includes(postInteractionActorId);
+        const nextLikedBy = isLiked
+          ? likedBy.filter(actorId => actorId !== postInteractionActorId)
+          : [...likedBy, postInteractionActorId];
+
         return {
           ...post,
           likedByUser: !isLiked,
-          likes: isLiked ? post.likes - 1 : post.likes + 1
+          likedBy: nextLikedBy,
+          likes: Math.max(0, post.likes + (isLiked ? -1 : 1))
         };
       }
       return post;
@@ -790,6 +959,7 @@ export function AppBody() {
   const handleAddComment = (postId: string, content: string) => {
     const newComment = {
       id: `comment_${Date.now()}`,
+      authorActorId: postInteractionActorId,
       authorName: currentUser.name,
       authorUsername: currentUser.username,
       authorAvatar: currentUser.avatar,
@@ -878,6 +1048,29 @@ export function AppBody() {
     }, 12000);
   };
 
+  const handleDeleteComment = (postId: string, commentId: string) => {
+    setPosts(prev => prev.map(post => {
+      if (post.id !== postId) return post;
+
+      const comments = post.comments || [];
+      const targetComment = comments.find(comment => comment.id === commentId);
+      const canDelete = Boolean(
+        targetComment && (
+          isAdminMode ||
+          targetComment.authorActorId === postInteractionActorId ||
+          targetComment.authorUsername === currentUser.username
+        )
+      );
+
+      if (!canDelete) return post;
+
+      return {
+        ...post,
+        comments: comments.filter(comment => comment.id !== commentId)
+      };
+    }));
+  };
+
   // 2.5 Manual Story Publishing
   const handleAddStory = (userId: string, mediaUrl: string, caption: string) => {
     const authorProfile = profiles.find(p => p.id === userId) || currentUser;
@@ -920,15 +1113,36 @@ export function AppBody() {
 
   // 3. Mark saved/bookmark posts
   const handleToggleSave = (postId: string) => {
-    setPosts(prev => prev.map(post => {
-      if (post.id === postId) {
+    const targetPost = posts.find(post => post.id === postId);
+
+    if (targetPost && isPostByPublicProfile(targetPost, profiles)) {
+      setPosts(prev => prev.map(post => {
+        if (post.id !== postId) return post;
+
+        const savedBy = Array.isArray(post.savedBy) ? post.savedBy : [];
+        const isSaved = savedBy.includes(postInteractionActorId);
+        const nextSavedBy = isSaved
+          ? savedBy.filter(actorId => actorId !== postInteractionActorId)
+          : [...savedBy, postInteractionActorId];
+
         return {
           ...post,
-          saved: !post.saved
+          saved: !isSaved,
+          savedBy: nextSavedBy
         };
-      }
-      return post;
-    }));
+      }));
+      return;
+    }
+
+    setPersonalPostInteractions(prev => {
+      const isSaved = prev.savedPostIds.includes(postId);
+      return {
+        ...prev,
+        savedPostIds: isSaved
+          ? prev.savedPostIds.filter(savedPostId => savedPostId !== postId)
+          : [...prev.savedPostIds, postId]
+      };
+    });
   };
 
   // 4. Create post author submissions
@@ -937,18 +1151,20 @@ export function AppBody() {
     const newPost: Post = {
       ...postDetails,
       id: postId,
+      authorActorId: currentUser.id,
       likes: 0,
       likedByUser: false,
       comments: [],
       shares: 0,
       saved: false,
+      savedBy: [],
       createdAt: 'Hace un momento'
     };
 
     setPosts(prev => [newPost, ...prev]);
 
     // Visitor reactive engagement simulation triggers
-    if (currentProfileId === 'simulated_user') {
+    if (isVisitorProfile(currentUser)) {
       // 1. Valeria likes after 5s
       setTimeout(() => {
         let likedSuccess = false;
@@ -1458,6 +1674,22 @@ export function AppBody() {
     setActiveTab('home');
   };
 
+  if (isLoggedIn && !sharedStateReady) {
+    return (
+      <div id="cero-shared-state-loading" className="min-h-screen bg-black flex flex-col items-center justify-center p-4 relative w-full">
+        <span className="fixed top-20 left-[20%] h-80 w-80 rounded-full bg-[#00bfb2]/5 blur-[120px] pointer-events-none" />
+        <span className="fixed bottom-20 right-[25%] h-80 w-80 rounded-full bg-[#ff9f1c]/5 blur-[120px] pointer-events-none" />
+
+        <div className="flex flex-col items-center gap-4">
+          <CerotalkLogo className="h-9" />
+          <div className="h-1 w-24 overflow-hidden rounded-full bg-zinc-900">
+            <span className="block h-full w-1/2 animate-[pulse_1.1s_ease-in-out_infinite] rounded-full bg-[#00bfb2]" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!isLoggedIn) {
     return (
       <div id="cero-login-stage" className="min-h-screen bg-black flex flex-col items-center justify-center p-4 relative w-full">
@@ -1496,28 +1728,15 @@ export function AppBody() {
                 setIsLoggedIn(true);
               } else {
                 setIsAdminMode(false);
-                const randomAvatar = VISITOR_AVATARS[Math.floor(Math.random() * VISITOR_AVATARS.length)];
-                const safeUserStrName = name;
-                const safeUserStrUsername = safeUserStrName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'visitante';
-                
-                const newVisitor: UserProfile = {
-                  id: 'simulated_user',
-                  name: safeUserStrName,
-                  username: `${safeUserStrUsername}_${Math.floor(Math.random() * 900 + 100)}`,
-                  avatar: randomAvatar,
-                  role: 'Visitante Temp',
-                  bio: 'Visitante activo. Explorando las primicias e intrigas de los personajes de la serie 🎬.',
-                  followers: 12,
-                  following: 48
-                };
+                const visitorProfile = createVisitorProfile(name, password);
 
                 setProfiles(prev => {
-                  const cleaned = prev.filter(p => p.id !== 'simulated_user');
-                  const updated = [newVisitor, ...cleaned];
+                  const cleaned = prev.filter(p => !isVisitorProfile(p));
+                  const updated = [visitorProfile, ...cleaned];
                   safeStorage.setItem('cero_profiles', JSON.stringify(updated));
                   return updated;
                 });
-                setCurrentProfileId('simulated_user');
+                setCurrentProfileId(visitorProfile.id);
                 setIsLoggedIn(true);
               }
             }} 
@@ -1573,7 +1792,7 @@ export function AppBody() {
   const isTempVisitorUsername = (username: string): boolean => {
     const profile = profiles.find(p => p.username === username);
     if (profile) {
-      return profile.role === 'Visitante Temp' || profile.id === 'simulated_user';
+      return isVisitorProfile(profile);
     }
     const knownMainUsernames = ['mat.moa', 'valeee.', 'Di3g0', 'sofi_a', 'Lu_Lu'];
     return !knownMainUsernames.includes(username);
@@ -1582,18 +1801,27 @@ export function AppBody() {
   const isTempVisitorStory = (story: Story): boolean => {
     const profile = profiles.find(p => p.id === story.userId || p.username === story.username);
     if (profile) {
-      return profile.role === 'Visitante Temp' || profile.id === 'simulated_user';
+      return isVisitorProfile(profile);
     }
     const knownMainUsernames = ['mat.moa', 'valeee.', 'Di3g0', 'sofi_a', 'Lu_Lu'];
     return !knownMainUsernames.includes(story.username);
   };
 
   const visiblePosts = (posts || []).filter(post => {
+    if (post.authorActorId && isVisitorProfileId(post.authorActorId)) {
+      return post.authorActorId === currentUser.id;
+    }
+
     if (isTempVisitorUsername(post.authorUsername)) {
       return currentUser.username === post.authorUsername;
     }
     return true;
-  });
+  }).map(post => ({
+    ...post,
+    likedByUser: Array.isArray(post.likedBy) && post.likedBy.includes(postInteractionActorId),
+    saved: (Array.isArray(post.savedBy) && post.savedBy.includes(postInteractionActorId))
+      || personalPostInteractions.savedPostIds.includes(post.id)
+  }));
 
   const visibleStories = (stories || []).filter(story => {
     if (isTempVisitorStory(story)) {
@@ -1769,6 +1997,7 @@ export function AppBody() {
               onAddStory={handleAddStory}
               onToggleLike={handleToggleLike}
               onAddComment={handleAddComment}
+              onDeleteComment={handleDeleteComment}
               onToggleSave={handleToggleSave}
               onSharePost={handleShareDetails}
               isAdminMode={isAdminMode}
@@ -1847,7 +2076,7 @@ export function AppBody() {
             onSendMessage={handleSendMessage}
             onMarkChatAsRead={handleMarkChatAsRead}
             onReceiveAutoReply={handleReceiveAutoReply}
-            isVisitor={currentProfileId === 'simulated_user'}
+            isVisitor={isVisitorProfile(currentUser)}
           />
         )}
 

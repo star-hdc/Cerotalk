@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Post, UserProfile } from '../types';
 import { CURRENT_USER } from '../data/mockData';
 import { Bookmark, FileText, Settings, Heart, MessageSquare, Sparkles, LogOut } from 'lucide-react';
+import HashtagText from './HashtagText';
 
 interface ProfileTabProps {
   currentUser: UserProfile;
@@ -156,12 +157,15 @@ export default function ProfileTab({
       ) : (
         // Chronological List Layout Design
         <div id="profile-post-list" className="space-y-4">
-          {displayedPosts.map((post) => (
-            <div 
-              key={post.id}
-              id={`list-post-item-${post.id}`}
-              className="bg-[#111318] rounded-xl border border-zinc-950 p-4 relative"
-            >
+          {displayedPosts.map((post) => {
+            const savedCount = post.savedBy?.length || 0;
+
+            return (
+              <div 
+                key={post.id}
+                id={`list-post-item-${post.id}`}
+                className="bg-[#111318] rounded-xl border border-zinc-950 p-4 relative"
+              >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
                   <img 
@@ -179,7 +183,7 @@ export default function ProfileTab({
               </div>
 
               <p className="font-sans text-xs text-zinc-300 ml-1.5 leading-relaxed truncate max-w-lg mb-2">
-                {post.content}
+                <HashtagText text={post.content} />
               </p>
 
               {post.mediaType === 'image' && post.mediaUrl && (
@@ -210,11 +214,12 @@ export default function ProfileTab({
                   className={`flex items-center gap-1 hover:text-[#ff9f1c] ${post.saved ? 'text-[#ff9f1c]' : ''}`}
                 >
                   <Bookmark className="h-4 w-4" />
-                  {post.saved ? 'Guardado' : 'Guardar'}
+                  {savedCount} {savedCount === 1 ? 'guardado' : 'guardados'}
                 </button>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
 
