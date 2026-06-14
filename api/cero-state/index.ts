@@ -1,4 +1,4 @@
-import { readState, saveState } from './_shared';
+import { readState, saveState } from './_shared.js';
 
 export default async function handler(req: any, res: any) {
   try {
