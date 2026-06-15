@@ -226,25 +226,12 @@ export default function StoryViewer({
           />
 
           {/* Story Visual Frame */}
-          {currentStory.mediaUrl.match(/^data:video\/|\.(mp4|webm|ogg)(\?.*)?$/i) ? (
-            <video 
-              key={currentStory.id}
-              src={currentStory.mediaUrl} 
-              className="max-h-full w-full object-contain"
-              autoPlay
-              muted
-              playsInline
-              loop
-            />
-          ) : (
-            <img 
-              key={currentStory.id}
-              src={currentStory.mediaUrl} 
-              alt="Story content" 
-              className="max-h-full w-full object-contain"
-              referrerPolicy="no-referrer"
-            />
-          )}
+          <img 
+            src={currentStory.mediaUrl} 
+            alt="Story content" 
+            className="max-h-full w-full object-contain"
+            referrerPolicy="no-referrer"
+          />
 
           {/* Navigation Overlay Arrows for Desktop */}
           <div className="absolute inset-x-4 z-20 flex hidden justify-between pointer-events-none md:flex">

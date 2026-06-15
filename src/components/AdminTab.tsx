@@ -405,7 +405,13 @@ export default function AdminTab({
                                 onChange={(e) => {
                                   const file = e.target.files?.[0];
                                   if (file) {
-                                    setPostMediaUrl(URL.createObjectURL(file));
+                                    const reader = new FileReader();
+                                    reader.onload = (event) => {
+                                      if (event.target?.result) {
+                                        setCustomAvatarUrl(event.target.result as string);
+                                      }
+                                    };
+                                    reader.readAsDataURL(file);
                                   }
                                 }}
                               />
@@ -592,10 +598,10 @@ export default function AdminTab({
                     <Camera className="h-4 w-4 text-[#00bfb2]" />
                     <span className="font-sans text-[10.5px] text-zinc-400">Buscar archivo en el ordenador...</span>
                   </div>
-                  <input
-                    type="file"
-                    accept={postMediaType === 'video' ? 'video/mp4,video/webm,video/ogg' : postMediaType === 'gif' ? 'image/gif,image/*' : 'image/*'}
-                    className="hidden"
+                  <input 
+                    type="file" 
+                    accept={postMediaType === 'video' ? 'video/*' : postMediaType === 'gif' ? 'image/gif,image/*' : 'image/*'} 
+                    className="hidden" 
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {

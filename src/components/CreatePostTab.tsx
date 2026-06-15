@@ -239,14 +239,20 @@ export default function CreatePostTab({ currentUser, onAddPost, onNavigateToHome
                     <span className="font-sans text-[11px] text-zinc-300 font-medium">Seleccionar archivo...</span>
                     <span className="font-sans text-[9px] text-zinc-500">Haz clic para buscar fotos locales</span>
                   </div>
-                  <input
-                    type="file"
-                    accept={mediaType === 'video' ? 'video/mp4,video/webm,video/ogg' : mediaType === 'gif' ? 'image/gif,image/*' : 'image/*'}
-                    className="hidden"
+                  <input 
+                    type="file" 
+                    accept={mediaType === 'video' ? 'video/*' : mediaType === 'gif' ? 'image/gif,image/*' : 'image/*'} 
+                    className="hidden" 
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        setMediaUrl(URL.createObjectURL(file));
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          if (event.target?.result) {
+                            setMediaUrl(event.target.result as string);
+                          }
+                        };
+                        reader.readAsDataURL(file);
                       }
                     }}
                   />

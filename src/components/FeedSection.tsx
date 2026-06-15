@@ -579,19 +579,25 @@ export default function FeedSection({
             {/* Upload image from computer */}
             <div className="space-y-1">
               <span className="font-sans text-[10px] font-bold text-zinc-400 uppercase tracking-wide block select-none">
-                O carga una foto o video desde tu dispositivo:
+                O carga una foto desde tu dispositivo:
               </span>
               <label className="flex flex-col items-center justify-center border border-dashed border-zinc-850 rounded-xl bg-zinc-950/40 py-2 hover:border-[#00bfb2] hover:bg-zinc-950/60 cursor-pointer transition-all">
                 <Camera className="h-4 w-4 text-[#00bfb2] mb-0.5" />
                 <span className="font-sans text-[9px] text-zinc-400 font-medium">Click para buscar...</span>
                 <input 
                   type="file" 
-                  accept="image/*,video/mp4,video/webm,video/ogg" 
+                  accept="image/*" 
                   className="hidden" 
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      setAddStoryMediaUrl(URL.createObjectURL(file));
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        if (event.target?.result) {
+                          setAddStoryMediaUrl(event.target.result as string);
+                        }
+                      };
+                      reader.readAsDataURL(file);
                     }
                   }}
                 />
@@ -616,7 +622,15 @@ export default function FeedSection({
 
             {/* Preview */}
             <div className="relative h-16 w-full overflow-hidden bg-black flex items-center justify-center rounded-xl border border-zinc-900 select-none">
-              {addStoryMediaUrl.match(/^blob:|data:video\/|\.(mp4|webm|ogg)(\?.*)?$/i) ? ( <video src={addStoryMediaUrl} className="h-full w-full object-cover brightness-95" autoPlay muted playsInline loop /> ) : ( <img src={addStoryMediaUrl} alt="Story preview" className="h-full w-full object-cover brightness-95" onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1507525428033-b723cf961d3e?auto=format&fit=crop&w=200&q=80'; }} referrerPolicy="no-referrer" /> )}
+              <img 
+                src={addStoryMediaUrl} 
+                alt="Story preview" 
+                className="h-full w-full object-cover brightness-95" 
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1507525428033-b723cf961d3e?auto=format&fit=crop&w=200&q=80';
+                }}
+                referrerPolicy="no-referrer"
+              />
               {addStoryCaption && (
                 <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1.5 py-0.5 text-center">
                   <span className="text-[9px] text-zinc-100 font-sans font-medium line-clamp-1">{addStoryCaption}</span>
