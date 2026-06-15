@@ -227,13 +227,20 @@ export default defineConfig(({ mode }) => {
   };
 
   return {
-    plugins: [sharedStateApi(env), react(), tailwindcss()],
+    plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
     },
     server: {
+      proxy: {
+        '/api': {
+          target: 'https://cerotalk.vercel.app',
+          changeOrigin: true,
+          secure: false,
+        }
+      },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: env.DISABLE_HMR !== 'true',

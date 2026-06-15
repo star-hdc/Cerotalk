@@ -1,0 +1,1 @@
+const fs = require('fs'); let c = fs.readFileSync('src/components/FeedSection.tsx', 'utf8'); c = c.replace(/const reader = new FileReader\(\);[\s\S]*?reader\.readAsDataURL\(file\);/, 'setAddStoryMediaUrl(URL.createObjectURL(file));'); fs.writeFileSync('src/components/FeedSection.tsx', c);
