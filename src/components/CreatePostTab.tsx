@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Post, UserProfile } from '../types';
 import { CURRENT_USER } from '../data/mockData';
 import { Camera, FileText, Image as ImageIcon, Send, Sparkles, Check, Film, Video } from 'lucide-react';
+import { fileToOptimizedDataUrl } from '../utils/media';
 
 interface CreatePostTabProps {
   currentUser: UserProfile;
@@ -243,16 +244,10 @@ export default function CreatePostTab({ currentUser, onAddPost, onNavigateToHome
                     type="file" 
                     accept={mediaType === 'video' ? 'video/*' : mediaType === 'gif' ? 'image/gif,image/*' : 'image/*'} 
                     className="hidden" 
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                          if (event.target?.result) {
-                            setMediaUrl(event.target.result as string);
-                          }
-                        };
-                        reader.readAsDataURL(file);
+                        setMediaUrl(await fileToOptimizedDataUrl(file, mediaType === 'image' ? 900 : 1200, 0.76));
                       }
                     }}
                   />

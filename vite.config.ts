@@ -15,7 +15,7 @@ const stateDir = path.resolve(__dirname, 'data');
 const statePath = path.join(stateDir, 'cerotalk-state.json');
 const normalizedStatePath = statePath.split(path.sep).join('/');
 const supabaseTableName = 'cerotalk_state';
-const supabaseStateId = 'main';
+const supabaseStateId = 'main_live';
 
 type RuntimeEnv = Record<string, string | undefined>;
 
@@ -172,6 +172,7 @@ function readRequestBody(req: import('node:http').IncomingMessage): Promise<stri
 function sendJson(res: import('node:http').ServerResponse, statusCode: number, payload: unknown) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
   res.end(JSON.stringify(payload));
 }
 

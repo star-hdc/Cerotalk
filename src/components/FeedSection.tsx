@@ -8,6 +8,7 @@ import { Post, Story, UserProfile } from '../types';
 import { Heart, MessageSquare, Repeat2, Bookmark, Send, Sparkles, AlertCircle, Share2, Copy, Camera, X, Trash2 } from 'lucide-react';
 import HashtagText from './HashtagText';
 import PostMedia from './PostMedia';
+import { fileToOptimizedDataUrl } from '../utils/media';
 
 interface FeedSectionProps {
   posts: Post[];
@@ -588,16 +589,10 @@ export default function FeedSection({
                   type="file" 
                   accept="image/*" 
                   className="hidden" 
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      const reader = new FileReader();
-                      reader.onload = (event) => {
-                        if (event.target?.result) {
-                          setAddStoryMediaUrl(event.target.result as string);
-                        }
-                      };
-                      reader.readAsDataURL(file);
+                      setAddStoryMediaUrl(await fileToOptimizedDataUrl(file, 900, 0.76));
                     }
                   }}
                 />

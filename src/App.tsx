@@ -272,6 +272,8 @@ export function AppBody() {
   const saveSharedStateTimer = useRef<number | null>(null);
   const isApplyingSharedState = useRef(false);
   const lastSharedStateUpdate = useRef<string | null>(null);
+  const pendingLocalWriteUntil = useRef(0);
+  const shouldAutosaveSharedState = useRef(false);
 
   // Navigation State
   const [activeTab, setActiveTab] = useState<'home' | 'explore' | 'create' | 'profile' | 'admin'>('home');
@@ -429,6 +431,8 @@ export function AppBody() {
   ));
 
   const applySharedStateFromServer = (shared: Partial<SharedCeroState>) => {
+    if (Date.now() < pendingLocalWriteUntil.current) return;
+
     isApplyingSharedState.current = true;
     lastSharedStateUpdate.current = shared.updatedAt || lastSharedStateUpdate.current;
     const publicProfiles = withoutVisitorProfiles(shared.profiles || INITIAL_PROFILES);
@@ -439,6 +443,44 @@ export function AppBody() {
       setChats(shared.chats || INITIAL_CHATS);
       setNotifications(shared.notifications || INITIAL_NOTIFICATIONS);
     }
+  };
+
+  const saveSharedStateNow = (overrides: Partial<SharedCeroState> = {}) => {
+    if (!sharedStateReady) return;
+    shouldAutosaveSharedState.current = true;
+
+    const sharedState = sanitizeSharedState({
+      profiles,
+      posts,
+      stories,
+      chats,
+      notifications,
+      ...overrides
+    });
+
+    if (!hasAllMainProfiles(sharedState.profiles)) return;
+
+    pendingLocalWriteUntil.current = Date.now() + 3500;
+
+    fetch(SHARED_STATE_API, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(sharedState),
+    })
+      .then(response => response.ok ? response.json() : null)
+      .then((saved: Partial<SharedCeroState> | null) => {
+        if (saved?.updatedAt) {
+          lastSharedStateUpdate.current = saved.updatedAt;
+        }
+      })
+      .catch(error => {
+        console.warn('No se pudo guardar el estado compartido.', error);
+      })
+      .finally(() => {
+        pendingLocalWriteUntil.current = 0;
+      });
   };
 
   useEffect(() => {
@@ -482,41 +524,20 @@ export function AppBody() {
 
     if (isApplyingSharedState.current) {
       isApplyingSharedState.current = false;
+      shouldAutosaveSharedState.current = false;
       return;
     }
+
+    if (!shouldAutosaveSharedState.current) return;
 
     if (saveSharedStateTimer.current !== null) {
       window.clearTimeout(saveSharedStateTimer.current);
     }
 
     saveSharedStateTimer.current = window.setTimeout(() => {
-      const sharedState = sanitizeSharedState({
-        profiles,
-        posts,
-        stories,
-        chats,
-        notifications
-      });
-
-      if (!hasAllMainProfiles(sharedState.profiles)) return;
-
-      fetch(SHARED_STATE_API, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(sharedState),
-      })
-        .then(response => response.ok ? response.json() : null)
-        .then((saved: Partial<SharedCeroState> | null) => {
-          if (saved?.updatedAt) {
-            lastSharedStateUpdate.current = saved.updatedAt;
-          }
-        })
-        .catch(error => {
-          console.warn('No se pudo guardar el estado compartido.', error);
-        });
-    }, 300);
+      shouldAutosaveSharedState.current = false;
+      saveSharedStateNow();
+    }, 150);
 
     return () => {
       if (saveSharedStateTimer.current !== null) {
@@ -528,7 +549,9 @@ export function AppBody() {
   useEffect(() => {
     if (!sharedStateReady) return;
 
-    const intervalId = window.setInterval(async () => {
+    const refreshSharedState = async () => {
+      if (Date.now() < pendingLocalWriteUntil.current) return;
+
       try {
         const response = await fetch(SHARED_STATE_API);
         if (!response.ok) return;
@@ -540,9 +563,23 @@ export function AppBody() {
       } catch (error) {
         console.warn('No se pudo refrescar el estado compartido.', error);
       }
-    }, 5000);
+    };
 
-    return () => window.clearInterval(intervalId);
+    const handleVisibleRefresh = () => {
+      if (document.visibilityState === 'visible') {
+        refreshSharedState();
+      }
+    };
+
+    const intervalId = window.setInterval(refreshSharedState, 1500);
+    window.addEventListener('focus', refreshSharedState);
+    document.addEventListener('visibilitychange', handleVisibleRefresh);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshSharedState);
+      document.removeEventListener('visibilitychange', handleVisibleRefresh);
+    };
   }, [sharedStateReady]);
 
   // Persist State to safeStorage (every time state updates)
@@ -958,23 +995,27 @@ export function AppBody() {
   
   // 1. Toggle Liking Posts
   const handleToggleLike = (postId: string) => {
-    setPosts(prev => prev.map(post => {
-      if (post.id === postId) {
-        const likedBy = Array.isArray(post.likedBy) ? post.likedBy : [];
-        const isLiked = likedBy.includes(postInteractionActorId);
-        const nextLikedBy = isLiked
-          ? likedBy.filter(actorId => actorId !== postInteractionActorId)
-          : [...likedBy, postInteractionActorId];
+    setPosts(prev => {
+      const updated = prev.map(post => {
+        if (post.id === postId) {
+          const likedBy = Array.isArray(post.likedBy) ? post.likedBy : [];
+          const isLiked = likedBy.includes(postInteractionActorId);
+          const nextLikedBy = isLiked
+            ? likedBy.filter(actorId => actorId !== postInteractionActorId)
+            : [...likedBy, postInteractionActorId];
 
-        return {
-          ...post,
-          likedByUser: !isLiked,
-          likedBy: nextLikedBy,
-          likes: Math.max(0, post.likes + (isLiked ? -1 : 1))
-        };
-      }
-      return post;
-    }));
+          return {
+            ...post,
+            likedByUser: !isLiked,
+            likedBy: nextLikedBy,
+            likes: Math.max(0, post.likes + (isLiked ? -1 : 1))
+          };
+        }
+        return post;
+      });
+      saveSharedStateNow({ posts: updated });
+      return updated;
+    });
   };
 
   // 2. Slide Comments
@@ -989,15 +1030,19 @@ export function AppBody() {
       createdAt: 'Justo ahora'
     };
 
-    setPosts(prev => prev.map(post => {
-      if (post.id === postId) {
-        return {
-          ...post,
-          comments: [...(post.comments || []), newComment]
-        };
-      }
-      return post;
-    }));
+    setPosts(prev => {
+      const updated = prev.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            comments: [...(post.comments || []), newComment]
+          };
+        }
+        return post;
+      });
+      saveSharedStateNow({ posts: updated });
+      return updated;
+    });
 
     // Optional simulated comment response from another user (random delay)
     setTimeout(() => {
@@ -1058,39 +1103,47 @@ export function AppBody() {
         createdAt: 'Hace un momento'
       };
 
-      setPosts(prev => prev.map(p => {
-        if (p.id === postId) {
-          return {
-            ...p,
-            comments: [...(p.comments || []), friendComment]
-          };
-        }
-        return p;
-      }));
+      setPosts(prev => {
+        const updated = prev.map(p => {
+          if (p.id === postId) {
+            return {
+              ...p,
+              comments: [...(p.comments || []), friendComment]
+            };
+          }
+          return p;
+        });
+        saveSharedStateNow({ posts: updated });
+        return updated;
+      });
     }, 12000);
   };
 
   const handleDeleteComment = (postId: string, commentId: string) => {
-    setPosts(prev => prev.map(post => {
-      if (post.id !== postId) return post;
+    setPosts(prev => {
+      const updated = prev.map(post => {
+        if (post.id !== postId) return post;
 
-      const comments = post.comments || [];
-      const targetComment = comments.find(comment => comment.id === commentId);
-      const canDelete = Boolean(
-        targetComment && (
-          isAdminMode ||
-          targetComment.authorActorId === postInteractionActorId ||
-          targetComment.authorUsername === currentUser.username
-        )
-      );
+        const comments = post.comments || [];
+        const targetComment = comments.find(comment => comment.id === commentId);
+        const canDelete = Boolean(
+          targetComment && (
+            isAdminMode ||
+            targetComment.authorActorId === postInteractionActorId ||
+            targetComment.authorUsername === currentUser.username
+          )
+        );
 
-      if (!canDelete) return post;
+        if (!canDelete) return post;
 
-      return {
-        ...post,
-        comments: comments.filter(comment => comment.id !== commentId)
-      };
-    }));
+        return {
+          ...post,
+          comments: comments.filter(comment => comment.id !== commentId)
+        };
+      });
+      saveSharedStateNow({ posts: updated });
+      return updated;
+    });
   };
 
   // 2.5 Manual Story Publishing
@@ -1110,6 +1163,7 @@ export function AppBody() {
     setStories(prev => {
       const updated = [newStory, ...(prev || [])];
       safeStorage.setItem('cero_stories', JSON.stringify(updated));
+      saveSharedStateNow({ stories: updated });
       return updated;
     });
   };
@@ -1119,6 +1173,7 @@ export function AppBody() {
     setStories(prev => {
       const updated = (prev || []).filter(s => s.id !== storyId);
       safeStorage.setItem('cero_stories', JSON.stringify(updated));
+      saveSharedStateNow({ stories: updated });
       return updated;
     });
     setStoryPlayingIndex(null);
@@ -1129,6 +1184,7 @@ export function AppBody() {
     setPosts(prev => {
       const updated = (prev || []).filter(p => p.id !== postId);
       safeStorage.setItem('cero_posts', JSON.stringify(updated));
+      saveSharedStateNow({ posts: updated });
       return updated;
     });
   };
@@ -1138,21 +1194,25 @@ export function AppBody() {
     const targetPost = posts.find(post => post.id === postId);
 
     if (targetPost && isPostByPublicProfile(targetPost, profiles)) {
-      setPosts(prev => prev.map(post => {
-        if (post.id !== postId) return post;
+      setPosts(prev => {
+        const updated = prev.map(post => {
+          if (post.id !== postId) return post;
 
-        const savedBy = Array.isArray(post.savedBy) ? post.savedBy : [];
-        const isSaved = savedBy.includes(postInteractionActorId);
-        const nextSavedBy = isSaved
-          ? savedBy.filter(actorId => actorId !== postInteractionActorId)
-          : [...savedBy, postInteractionActorId];
+          const savedBy = Array.isArray(post.savedBy) ? post.savedBy : [];
+          const isSaved = savedBy.includes(postInteractionActorId);
+          const nextSavedBy = isSaved
+            ? savedBy.filter(actorId => actorId !== postInteractionActorId)
+            : [...savedBy, postInteractionActorId];
 
-        return {
-          ...post,
-          saved: !isSaved,
-          savedBy: nextSavedBy
-        };
-      }));
+          return {
+            ...post,
+            saved: !isSaved,
+            savedBy: nextSavedBy
+          };
+        });
+        saveSharedStateNow({ posts: updated });
+        return updated;
+      });
       return;
     }
 
@@ -1183,7 +1243,11 @@ export function AppBody() {
       createdAt: 'Hace un momento'
     };
 
-    setPosts(prev => [newPost, ...prev]);
+    setPosts(prev => {
+      const updated = [newPost, ...prev];
+      saveSharedStateNow({ posts: updated });
+      return updated;
+    });
 
     // Visitor reactive engagement simulation triggers
     if (isVisitorProfile(currentUser)) {
@@ -1666,12 +1730,16 @@ export function AppBody() {
 
   const handleShareDetails = (postId: string) => {
     // Increment sharing list count
-    setPosts(prev => prev.map(p => {
-      if (p.id === postId) {
-        return { ...p, shares: p.shares + 1 };
-      }
-      return p;
-    }));
+    setPosts(prev => {
+      const updated = prev.map(p => {
+        if (p.id === postId) {
+          return { ...p, shares: p.shares + 1 };
+        }
+        return p;
+      });
+      saveSharedStateNow({ posts: updated });
+      return updated;
+    });
   };
 
   // Direct layout zooming helper (switches active selected tab & triggers focus)
@@ -1695,22 +1763,6 @@ export function AppBody() {
     setCurrentProfileId('user');
     setActiveTab('home');
   };
-
-  if (isLoggedIn && !sharedStateReady) {
-    return (
-      <div id="cero-shared-state-loading" className="min-h-screen bg-black flex flex-col items-center justify-center p-4 relative w-full">
-        <span className="fixed top-20 left-[20%] h-80 w-80 rounded-full bg-[#00bfb2]/5 blur-[120px] pointer-events-none" />
-        <span className="fixed bottom-20 right-[25%] h-80 w-80 rounded-full bg-[#ff9f1c]/5 blur-[120px] pointer-events-none" />
-
-        <div className="flex flex-col items-center gap-4">
-          <CerotalkLogo className="h-9" />
-          <div className="h-1 w-24 overflow-hidden rounded-full bg-zinc-900">
-            <span className="block h-full w-1/2 animate-[pulse_1.1s_ease-in-out_infinite] rounded-full bg-[#00bfb2]" />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (!isLoggedIn) {
     return (

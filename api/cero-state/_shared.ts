@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const TABLE_NAME = 'cerotalk_state';
-const STATE_ID = 'main';
+const STATE_ID = 'main_live';
 const DEFAULT_STATE_PATH = path.join(process.cwd(), 'data', 'cerotalk-state.json');
 
 type SharedCeroState = {

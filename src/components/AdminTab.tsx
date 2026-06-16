@@ -21,6 +21,7 @@ import {
   Film,
   Video
 } from 'lucide-react';
+import { fileToOptimizedDataUrl } from '../utils/media';
 
 interface AdminTabProps {
   profiles: UserProfile[];
@@ -402,16 +403,10 @@ export default function AdminTab({
                                 type="file" 
                                 accept="image/*" 
                                 className="hidden" 
-                                onChange={(e) => {
+                                onChange={async (e) => {
                                   const file = e.target.files?.[0];
                                   if (file) {
-                                    const reader = new FileReader();
-                                    reader.onload = (event) => {
-                                      if (event.target?.result) {
-                                        setCustomAvatarUrl(event.target.result as string);
-                                      }
-                                    };
-                                    reader.readAsDataURL(file);
+                                    setCustomAvatarUrl(await fileToOptimizedDataUrl(file, 360, 0.78));
                                   }
                                 }}
                               />
@@ -602,16 +597,10 @@ export default function AdminTab({
                     type="file" 
                     accept={postMediaType === 'video' ? 'video/*' : postMediaType === 'gif' ? 'image/gif,image/*' : 'image/*'} 
                     className="hidden" 
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                          if (event.target?.result) {
-                            setPostMediaUrl(event.target.result as string);
-                          }
-                        };
-                        reader.readAsDataURL(file);
+                        setPostMediaUrl(await fileToOptimizedDataUrl(file, postMediaType === 'image' ? 900 : 1200, 0.76));
                       }
                     }}
                   />
