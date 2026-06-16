@@ -87,6 +87,8 @@ type SharedCeroState = {
 
 const SHARED_STATE_API = '/api/cero-state';
 const LEGACY_VISITOR_PROFILE_ID = 'simulated_user';
+const ADMIN_LOGIN_USERNAME = 'admin10';
+const ADMIN_LOGIN_PASSWORD = 'NF2026';
 
 const isVisitorProfile = (profile: UserProfile) => (
   profile.id === LEGACY_VISITOR_PROFILE_ID || profile.id.startsWith('temp_') || profile.role === 'Visitante Temp'
@@ -224,8 +226,10 @@ const sanitizeSharedState = (state: SharedCeroState): SharedCeroState => ({
   notifications: state.notifications || []
 });
 
-const applySharedProfiles = (incomingProfiles: UserProfile[], currentProfiles: UserProfile[]) => {
-  const visitor = currentProfiles.find(profile => profile && isVisitorProfile(profile));
+const applySharedProfiles = (incomingProfiles: UserProfile[], currentProfiles: UserProfile[], preserveVisitor = true) => {
+  const visitor = preserveVisitor
+    ? currentProfiles.find(profile => profile && isVisitorProfile(profile))
+    : null;
   return visitor ? [visitor, ...withoutVisitorProfiles(incomingProfiles)] : withoutVisitorProfiles(incomingProfiles);
 };
 
@@ -416,7 +420,7 @@ export function AppBody() {
     isApplyingSharedState.current = true;
     lastSharedStateUpdate.current = shared.updatedAt || lastSharedStateUpdate.current;
     const publicProfiles = withoutVisitorProfiles(shared.profiles || INITIAL_PROFILES);
-    setProfiles(prev => applySharedProfiles(shared.profiles || INITIAL_PROFILES, prev));
+    setProfiles(prev => applySharedProfiles(shared.profiles || INITIAL_PROFILES, prev, !isAdminMode));
     setPosts(prev => mergeSharedAndPrivatePosts(shared.posts || INITIAL_POSTS, prev, publicProfiles));
     setStories(shared.stories || INITIAL_STORIES);
     if (!isVisitorProfile(currentUser)) {
@@ -437,6 +441,12 @@ export function AppBody() {
 
         const shared = await response.json() as Partial<SharedCeroState>;
         if (cancelled) return;
+
+        // If the server returns the fallback date, it means there is no persistent backend data.
+        // We should NOT overwrite our local storage with the server's empty default state.
+        if (shared.updatedAt === '2000-01-01T00:00:00.000Z') {
+          return;
+        }
 
         applySharedStateFromServer(shared);
       } catch (error) {
@@ -1722,9 +1732,28 @@ export function AppBody() {
 
               if (!name) return;
 
-              if (name === 'Admin10' && password === 'NF2026') {
+              const normalizedName = normalizeVisitorCredential(name);
+
+              if (normalizedName === ADMIN_LOGIN_USERNAME) {
+                if (password !== ADMIN_LOGIN_PASSWORD) {
+                  window.alert('Contraseña de Admin incorrecta.');
+                  return;
+                }
+
+                const adminProfile = profiles.find(profile => profile.id === 'user') || INITIAL_PROFILES.find(profile => profile.id === 'user') || INITIAL_PROFILES[0];
+                const publicProfiles = withoutVisitorProfiles(profiles);
+                const profilesWithAdmin = [
+                  adminProfile,
+                  ...publicProfiles.filter(profile => profile.id !== adminProfile.id)
+                ];
+
                 setIsAdminMode(true);
-                setCurrentProfileId('user');
+                setProfiles(profilesWithAdmin);
+                setCurrentProfileId(adminProfile.id);
+                safeStorage.setItem('cero_profiles', JSON.stringify(profilesWithAdmin));
+                safeStorage.setItem('cero_current_profile_id', adminProfile.id);
+                safeStorage.setItem('cero_is_admin_mode', 'true');
+                setActiveTab('admin');
                 setIsLoggedIn(true);
               } else {
                 setIsAdminMode(false);
