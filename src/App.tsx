@@ -89,6 +89,7 @@ const SHARED_STATE_API = '/api/cero-state';
 const LEGACY_VISITOR_PROFILE_ID = 'simulated_user';
 const ADMIN_LOGIN_USERNAME = 'admin10';
 const ADMIN_LOGIN_PASSWORD = 'NF2026';
+const MAIN_PROFILE_IDS = ['user', 'valeee', 'diego', 'sofia', 'lulu'];
 
 const isVisitorProfile = (profile: UserProfile) => (
   profile.id === LEGACY_VISITOR_PROFILE_ID || profile.id.startsWith('temp_') || profile.role === 'Visitante Temp'
@@ -226,11 +227,22 @@ const sanitizeSharedState = (state: SharedCeroState): SharedCeroState => ({
   notifications: state.notifications || []
 });
 
+const hasAllMainProfiles = (profiles: UserProfile[]) => (
+  MAIN_PROFILE_IDS.every(profileId => profiles.some(profile => profile && profile.id === profileId))
+);
+
 const applySharedProfiles = (incomingProfiles: UserProfile[], currentProfiles: UserProfile[], preserveVisitor = true) => {
   const visitor = preserveVisitor
     ? currentProfiles.find(profile => profile && isVisitorProfile(profile))
     : null;
-  return visitor ? [visitor, ...withoutVisitorProfiles(incomingProfiles)] : withoutVisitorProfiles(incomingProfiles);
+  const publicProfiles = withoutVisitorProfiles(incomingProfiles);
+  const existingPublicProfiles = withoutVisitorProfiles(currentProfiles);
+  const missingExistingProfiles = existingPublicProfiles.filter(existingProfile => (
+    existingProfile && !publicProfiles.some(profile => profile.id === existingProfile.id)
+  ));
+  const mergedProfiles = [...publicProfiles, ...missingExistingProfiles];
+
+  return visitor ? [visitor, ...mergedProfiles] : mergedProfiles;
 };
 
 const mergeSharedAndPrivatePosts = (
@@ -486,7 +498,7 @@ export function AppBody() {
         notifications
       });
 
-      if (sharedState.profiles.length === 0) return;
+      if (!hasAllMainProfiles(sharedState.profiles)) return;
 
       fetch(SHARED_STATE_API, {
         method: 'PUT',
@@ -1741,16 +1753,9 @@ export function AppBody() {
                 }
 
                 const adminProfile = profiles.find(profile => profile.id === 'user') || INITIAL_PROFILES.find(profile => profile.id === 'user') || INITIAL_PROFILES[0];
-                const publicProfiles = withoutVisitorProfiles(profiles);
-                const profilesWithAdmin = [
-                  adminProfile,
-                  ...publicProfiles.filter(profile => profile.id !== adminProfile.id)
-                ];
 
                 setIsAdminMode(true);
-                setProfiles(profilesWithAdmin);
                 setCurrentProfileId(adminProfile.id);
-                safeStorage.setItem('cero_profiles', JSON.stringify(profilesWithAdmin));
                 safeStorage.setItem('cero_current_profile_id', adminProfile.id);
                 safeStorage.setItem('cero_is_admin_mode', 'true');
                 setActiveTab('admin');
