@@ -24,7 +24,7 @@ function readDefaultStateFile(): SharedCeroState {
       stories: Array.isArray(parsed.stories) ? parsed.stories : [],
       chats: Array.isArray(parsed.chats) ? parsed.chats : [],
       notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
-      updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : new Date().toISOString(),
+      updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : '2000-01-01T00:00:00.000Z',
     };
   } catch {
     return {
@@ -33,7 +33,7 @@ function readDefaultStateFile(): SharedCeroState {
       stories: [],
       chats: [],
       notifications: [],
-      updatedAt: new Date().toISOString(),
+      updatedAt: '2000-01-01T00:00:00.000Z',
     };
   }
 }
